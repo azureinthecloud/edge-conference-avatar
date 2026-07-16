@@ -1,14 +1,16 @@
 let peerConnection;
 let avatarSynthesizer;
 let speechConfig;
-let recognizer;
-let isListening = false;
+let continuousRecognizer = null;
+let isProcessing = false;
 let cfg;
 
 const captionBar = document.getElementById("captionBar");
 const listeningIndicator = document.getElementById("listeningIndicator");
 const idleOverlay = document.getElementById("idleOverlay");
 const remoteVideoDiv = document.getElementById("remoteVideo");
+
+const WAKE_WORD_REGEX = /\b(hey\s+)?aria\b(.*)/i;
 
 function showCaption(text, autohideMs) {
   captionBar.textContent = text;
@@ -88,64 +90,100 @@ async function startAvatar() {
   if (cfg.GREETING_LINE) {
     await avatarSynthesizer.speakTextAsync(cfg.GREETING_LINE);
   }
+
+  startWakeWordListening();
 }
 
 async function sendToGPT(userText) {
-  showCaption('You said: "' + userText + '"', null);
+  stopWakeWordListening();
+  isProcessing = true;
+  listeningIndicator.classList.remove("active");
 
-  const res = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ userText, systemPrompt: cfg.SYSTEM_PROMPT })
-  });
+  showCaption('Aria heard: "' + userText + '"', null);
 
-  if (!res.ok) {
-    showCaption("Hmm, having trouble thinking of a reply.", 4000);
-    return;
+  try {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userText, systemPrompt: cfg.SYSTEM_PROMPT })
+    });
+
+    if (!res.ok) {
+      showCaption("Hmm, having trouble thinking of a reply.", 4000);
+    } else {
+      const data = await res.json();
+      const replyText = data.reply;
+      showCaption(replyText, null);
+      await avatarSynthesizer.speakTextAsync(replyText);
+      setTimeout(() => captionBar.classList.remove("show"), 3000);
+    }
+  } catch (err) {
+    showCaption("Error: " + err.message, 5000);
   }
-  const data = await res.json();
-  const replyText = data.reply;
 
-  showCaption(replyText, null);
-  await avatarSynthesizer.speakTextAsync(replyText);
-  setTimeout(() => captionBar.classList.remove("show"), 3000);
+  isProcessing = false;
+  startWakeWordListening();
 }
 
-function startListening() {
-  if (!avatarSynthesizer || isListening) return;
-  isListening = true;
-  listeningIndicator.classList.add("active");
+function startWakeWordListening() {
+  if (!speechConfig || continuousRecognizer) return;
 
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-  recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+  continuousRecognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
 
-  recognizer.recognizeOnceAsync(result => {
-    isListening = false;
-    listeningIndicator.classList.remove("active");
-    if (result.text) {
-      sendToGPT(result.text);
+  continuousRecognizer.recognized = (s, e) => {
+    if (isProcessing) return;
+    if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
+      const transcript = e.result.text;
+      if (!transcript) return;
+
+      console.log("Heard:", transcript);
+      const match = transcript.match(WAKE_WORD_REGEX);
+
+      if (match) {
+        listeningIndicator.classList.add("active");
+        const question = match[2] && match[2].trim() ? match[2].trim() : transcript;
+        sendToGPT(question);
+      }
     }
-    recognizer.close();
-  });
+  };
+
+  continuousRecognizer.startContinuousRecognitionAsync(
+    () => console.log("Wake-word listening started."),
+    (err) => console.log("Failed to start continuous recognition:", err)
+  );
+}
+
+function stopWakeWordListening() {
+  if (!continuousRecognizer) return;
+  const recognizerToClose = continuousRecognizer;
+  continuousRecognizer = null;
+
+  recognizerToClose.stopContinuousRecognitionAsync(
+    () => recognizerToClose.close(),
+    (err) => {
+      console.log("Error stopping recognizer:", err);
+      recognizerToClose.close();
+    }
+  );
 }
 
 function stopAvatar() {
+  stopWakeWordListening();
   if (avatarSynthesizer) avatarSynthesizer.close();
   if (peerConnection) peerConnection.close();
   remoteVideoDiv.innerHTML = "";
   idleOverlay.style.display = "flex";
 }
 
-idleOverlay.addEventListener("click", startAvatar);
-document.body.addEventListener("click", () => {
-  if (idleOverlay.style.display !== "none") startAvatar();
+idleOverlay.addEventListener("click", () => {
+  startAvatar().catch(err => showCaption("Error: " + err.message, 8000));
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.code === "Space") {
+  if (e.code === "Space" && idleOverlay.style.display !== "none") {
     e.preventDefault();
-    if (idleOverlay.style.display !== "none") { startAvatar(); return; }
-    startListening();
+    startAvatar().catch(err => showCaption("Error: " + err.message, 8000));
   }
   if (e.code === "Escape") {
     stopAvatar();
