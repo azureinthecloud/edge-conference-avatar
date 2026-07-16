@@ -1,5 +1,3 @@
-// api/chat/index.js
-// Azure Functions HTTP trigger. Calls Azure OpenAI server-side so the key never reaches the browser.
 const fetch = require("node-fetch");
 
 module.exports = async function (context, req) {
@@ -13,11 +11,10 @@ module.exports = async function (context, req) {
   }
 
   const endpoint = process.env.OPENAI_ENDPOINT;
-  const deployment = process.env.OPENAI_DEPLOYMENT || "gpt-4o";
-  const apiVersion = process.env.OPENAI_API_VERSION || "2024-02-15-preview";
+  const deployment = process.env.OPENAI_DEPLOYMENT || "gpt-5-mini";
   const apiKey = process.env.OPENAI_KEY;
 
-  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
+  const url = `${endpoint}/responses`;
 
   const response = await fetch(url, {
     method: "POST",
@@ -26,12 +23,8 @@ module.exports = async function (context, req) {
       "api-key": apiKey
     },
     body: JSON.stringify({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userText }
-      ],
-      max_tokens: 150,
-      temperature: 0.9
+      model: deployment,
+      input: `${systemPrompt}\n\nUser: ${userText}`
     })
   });
 
@@ -42,7 +35,9 @@ module.exports = async function (context, req) {
   }
 
   const data = await response.json();
-  const reply = data.choices[0].message.content;
+  const reply = data.output && data.output[0] && data.output[0].content
+    ? data.output[0].content[0].text
+    : "Sorry, I've got nothing clever right now.";
 
   context.res = {
     status: 200,
