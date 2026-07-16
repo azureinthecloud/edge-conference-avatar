@@ -2,17 +2,24 @@ let peerConnection;
 let avatarSynthesizer;
 let speechConfig;
 let recognizer;
+let isListening = false;
+let cfg;
 
-const statusEl = document.getElementById("status");
+const captionBar = document.getElementById("captionBar");
+const listeningIndicator = document.getElementById("listeningIndicator");
+const idleOverlay = document.getElementById("idleOverlay");
+const remoteVideoDiv = document.getElementById("remoteVideo");
 
-function setStatus(msg) {
-  statusEl.textContent = msg;
-  console.log(msg);
+function showCaption(text, autohideMs) {
+  captionBar.textContent = text;
+  captionBar.classList.add("show");
+  if (autohideMs) {
+    clearTimeout(captionBar._t);
+    captionBar._t = setTimeout(() => captionBar.classList.remove("show"), autohideMs);
+  }
 }
 
 async function getConfig() {
-  // In production, fetch from your own API route instead of window.APP_CONFIG,
-  // so keys never sit in client-side JS. See api/get-config/index.js.
   try {
     const res = await fetch("/api/get-config");
     if (res.ok) return await res.json();
@@ -32,13 +39,13 @@ async function fetchIceToken(speechKey, speechRegion) {
 }
 
 async function startAvatar() {
-  const cfg = await getConfig();
+  idleOverlay.style.display = "none";
+  cfg = await getConfig();
   if (!cfg.SPEECH_KEY || !cfg.SPEECH_REGION) {
-    setStatus("Missing Speech key/region. Configure api/get-config or config.js.");
+    showCaption("Missing Speech key/region config.", 5000);
     return;
   }
 
-  setStatus("Fetching ICE token...");
   const ice = await fetchIceToken(cfg.SPEECH_KEY, cfg.SPEECH_REGION);
 
   peerConnection = new RTCPeerConnection({
@@ -49,20 +56,18 @@ async function startAvatar() {
     }]
   });
 
-  const remoteVideoDiv = document.getElementById("remoteVideo");
   remoteVideoDiv.innerHTML = "";
 
   peerConnection.ontrack = function (event) {
     if (event.track.kind === "video") {
       const videoEl = document.createElement("video");
-      videoEl.id = "videoPlayer";
       videoEl.autoplay = true;
+      videoEl.playsInline = true;
       videoEl.srcObject = event.streams[0];
       remoteVideoDiv.appendChild(videoEl);
     }
     if (event.track.kind === "audio") {
       const audioEl = document.createElement("audio");
-      audioEl.id = "audioPlayer";
       audioEl.autoplay = true;
       audioEl.srcObject = event.streams[0];
       remoteVideoDiv.appendChild(audioEl);
@@ -78,15 +83,15 @@ async function startAvatar() {
   const avatarConfig = new SpeechSDK.AvatarConfig(cfg.AVATAR_CHARACTER, cfg.AVATAR_STYLE);
   avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechConfig, avatarConfig);
 
-  setStatus("Starting avatar...");
   await avatarSynthesizer.startAvatarAsync(peerConnection);
-  setStatus("Avatar ready. Hold Talk to speak with it.");
 
-  window._cfg = cfg;
+  if (cfg.GREETING_LINE) {
+    await avatarSynthesizer.speakTextAsync(cfg.GREETING_LINE);
+  }
 }
 
-async function sendToGPT(userText, cfg) {
-  setStatus('You said: "' + userText + '" — thinking...');
+async function sendToGPT(userText) {
+  showCaption('You said: "' + userText + '"', null);
 
   const res = await fetch("/api/chat", {
     method: "POST",
@@ -95,27 +100,30 @@ async function sendToGPT(userText, cfg) {
   });
 
   if (!res.ok) {
-    setStatus("Error calling chat API: " + res.status);
+    showCaption("Hmm, having trouble thinking of a reply.", 4000);
     return;
   }
   const data = await res.json();
   const replyText = data.reply;
 
-  setStatus("Avatar replying...");
+  showCaption(replyText, null);
   await avatarSynthesizer.speakTextAsync(replyText);
-  setStatus("Avatar ready. Hold Talk to speak with it.");
+  setTimeout(() => captionBar.classList.remove("show"), 3000);
 }
 
 function startListening() {
-  if (!window._cfg) { setStatus("Start the avatar first."); return; }
+  if (!avatarSynthesizer || isListening) return;
+  isListening = true;
+  listeningIndicator.classList.add("active");
+
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
-  setStatus("Listening...");
+
   recognizer.recognizeOnceAsync(result => {
+    isListening = false;
+    listeningIndicator.classList.remove("active");
     if (result.text) {
-      sendToGPT(result.text, window._cfg);
-    } else {
-      setStatus("Didn't catch that, try again.");
+      sendToGPT(result.text);
     }
     recognizer.close();
   });
@@ -124,9 +132,22 @@ function startListening() {
 function stopAvatar() {
   if (avatarSynthesizer) avatarSynthesizer.close();
   if (peerConnection) peerConnection.close();
-  setStatus("Stopped.");
+  remoteVideoDiv.innerHTML = "";
+  idleOverlay.style.display = "flex";
 }
 
-document.getElementById("startBtn").addEventListener("click", startAvatar);
-document.getElementById("talkBtn").addEventListener("click", startListening);
-document.getElementById("stopBtn").addEventListener("click", stopAvatar);
+idleOverlay.addEventListener("click", startAvatar);
+document.body.addEventListener("click", () => {
+  if (idleOverlay.style.display !== "none") startAvatar();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space") {
+    e.preventDefault();
+    if (idleOverlay.style.display !== "none") { startAvatar(); return; }
+    startListening();
+  }
+  if (e.code === "Escape") {
+    stopAvatar();
+  }
+});
