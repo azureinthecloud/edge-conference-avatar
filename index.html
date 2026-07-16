@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Edge Conference AI Co-Host</title>
+<style>
+  body { background:#0b0b0f; color:#fff; font-family: Segoe UI, Arial, sans-serif; text-align:center; }
+  #videoPlayer, #audioPlayer { width: 640px; max-width: 90vw; border-radius: 12px; margin-top: 20px; }
+  #status { margin-top: 10px; font-size: 14px; color: #9adfff; }
+  button { padding: 10px 20px; margin: 8px; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; }
+  #startBtn { background:#0078D4; color:#fff; }
+  #talkBtn { background:#107C10; color:#fff; }
+  #stopBtn { background:#A80000; color:#fff; }
+</style>
+</head>
+<body>
+  <h1>AI Co-Host</h1>
+  <div>
+    <button id="startBtn">Start Avatar</button>
+    <button id="talkBtn">Hold to Talk</button>
+    <button id="stopBtn">Stop</button>
+  </div>
+  <div id="status">Not connected</div>
+  <div id="remoteVideo"></div>
+
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
