@@ -10,7 +10,7 @@ const listeningIndicator = document.getElementById("listeningIndicator");
 const idleOverlay = document.getElementById("idleOverlay");
 const remoteVideoDiv = document.getElementById("remoteVideo");
 
-const WAKE_WORD_REGEX = /\b(hey\s+)?aria\b(.*)/i;
+const WAKE_WORD_REGEX = /\b(hey\s+)?(kiri)\b(.*)/i;
 
 function showCaption(text, autohideMs) {
   captionBar.textContent = text;
@@ -99,7 +99,7 @@ async function sendToGPT(userText) {
   isProcessing = true;
   listeningIndicator.classList.remove("active");
 
-  showCaption('Aria heard: "' + userText + '"', null);
+  showCaption('Kiri heard: "' + userText + '"', null);
 
   try {
     const res = await fetch("/api/chat", {
@@ -131,6 +131,10 @@ function startWakeWordListening() {
   const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
   continuousRecognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
 
+  const phraseList = SpeechSDK.PhraseListGrammar.fromRecognizer(continuousRecognizer);
+  phraseList.addPhrase("Kiri");
+  phraseList.addPhrase("Hey Kiri");
+
   continuousRecognizer.recognized = (s, e) => {
     if (isProcessing) return;
     if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
@@ -142,7 +146,7 @@ function startWakeWordListening() {
 
       if (match) {
         listeningIndicator.classList.add("active");
-        const question = match[2] && match[2].trim() ? match[2].trim() : transcript;
+        const question = match[3] && match[3].trim() ? match[3].trim() : transcript;
         sendToGPT(question);
       }
     }
