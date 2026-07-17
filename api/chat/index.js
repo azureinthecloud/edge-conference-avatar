@@ -1,4 +1,4 @@
-let lastResponseId = null; // module-level, persists across calls in the same function instance
+let lastResponseId = null;
 
 module.exports = async function (context, req) {
   const userText = req.body && req.body.userText;
@@ -18,13 +18,12 @@ module.exports = async function (context, req) {
 
     const body = {
       model: deployment,
-      input: userText
+      input: userText,
+      instructions: systemPrompt
     };
 
     if (lastResponseId) {
       body.previous_response_id = lastResponseId;
-    } else {
-      body.instructions = systemPrompt;
     }
 
     const response = await fetch(url, {
@@ -34,6 +33,8 @@ module.exports = async function (context, req) {
     });
 
     const raw = await response.text();
+    context.log("Status:", response.status, "Body:", raw);
+
     if (!response.ok) {
       context.res = { status: 500, body: { error: raw } };
       return;
@@ -58,6 +59,7 @@ module.exports = async function (context, req) {
       body: { reply: reply || "Give me a sec, lost my train of thought." }
     };
   } catch (err) {
+    context.log("ERROR:", err.message, err.stack);
     context.res = { status: 500, body: { error: err.message } };
   }
 };
