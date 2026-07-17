@@ -12,6 +12,31 @@ const remoteVideoDiv = document.getElementById("remoteVideo");
 
 const WAKE_WORD_REGEX = /\b(hey\s+)?(kiri)\b(.*)/i;
 
+const SCRIPTED_RESPONSES = [
+  {
+    triggers: ["jet lag", "long flight", "tired"],
+    reply: "Oh please, I've been awake since this app deployed. Try running on zero sleep and a WebRTC connection, then we'll talk."
+  },
+  {
+    triggers: ["what do you think of new zealand", "new zealand", "nz"],
+    reply: "Kiwi hospitality, questionable weather, and I finally get an accent that matches my name. I'm thriving."
+  },
+  {
+    triggers: ["are you real", "are you human", "are you alive"],
+    reply: "Define real. I've got better uptime than most people after lunch."
+  }
+];
+
+function checkScriptedResponse(userText) {
+  const lower = userText.toLowerCase();
+  for (const entry of SCRIPTED_RESPONSES) {
+    if (entry.triggers.some(trigger => lower.includes(trigger))) {
+      return entry.reply;
+    }
+  }
+  return null;
+}
+
 function showCaption(text, autohideMs) {
   captionBar.textContent = text;
   captionBar.classList.add("show");
@@ -102,20 +127,28 @@ async function sendToGPT(userText) {
   showCaption('Kiri heard: "' + userText + '"', null);
 
   try {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userText, systemPrompt: cfg.SYSTEM_PROMPT })
-    });
+    const scripted = checkScriptedResponse(userText);
 
-    if (!res.ok) {
-      showCaption("Hmm, having trouble thinking of a reply.", 4000);
-    } else {
-      const data = await res.json();
-      const replyText = data.reply;
-      showCaption(replyText, null);
-      await avatarSynthesizer.speakTextAsync(replyText);
+    if (scripted) {
+      showCaption(scripted, null);
+      await avatarSynthesizer.speakTextAsync(scripted);
       setTimeout(() => captionBar.classList.remove("show"), 3000);
+    } else {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userText, systemPrompt: cfg.SYSTEM_PROMPT })
+      });
+
+      if (!res.ok) {
+        showCaption("Hmm, having trouble thinking of a reply.", 4000);
+      } else {
+        const data = await res.json();
+        const replyText = data.reply;
+        showCaption(replyText, null);
+        await avatarSynthesizer.speakTextAsync(replyText);
+        setTimeout(() => captionBar.classList.remove("show"), 3000);
+      }
     }
   } catch (err) {
     showCaption("Error: " + err.message, 5000);
