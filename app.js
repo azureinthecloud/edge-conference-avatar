@@ -5,6 +5,7 @@ let sessionActive = false;
 let isListening = false;
 let isSpeaking = false;
 let config = null;
+let hasStarted = false;
 
 const conversationState = {
   transcriptBuffer: [],
@@ -370,8 +371,44 @@ function startListening() {
   );
 }
 
+async function startExperience() {
+  if (hasStarted) return;
+  hasStarted = true;
+
+  el("idleOverlay")?.classList.add("hidden");
+  setStatus("Starting...");
+
+  try {
+    await loadConfig();
+    await connectAvatar();
+  } catch (error) {
+    logDebug(`Start failed: ${error.message}`);
+    setStatus("Start failed");
+    el("idleOverlay")?.classList.remove("hidden");
+    hasStarted = false;
+  }
+}
+
 function bindUi() {
+  const overlay = el("idleOverlay");
+
+  overlay?.addEventListener("click", () => {
+    startExperience();
+  });
+
+  overlay?.addEventListener("keydown", (e) => {
+    if (e.code === "Space" || e.code === "Enter") {
+      e.preventDefault();
+      startExperience();
+    }
+  });
+
   document.addEventListener("keydown", (e) => {
+    if (!hasStarted && e.code === "Space") {
+      e.preventDefault();
+      startExperience();
+    }
+
     if (e.code === "Escape") {
       stopSpeaking();
     }
@@ -382,14 +419,7 @@ function bindUi() {
   });
 }
 
-window.addEventListener("load", async () => {
+window.addEventListener("load", () => {
   bindUi();
-  await loadConfig();
-
-  try {
-    await connectAvatar();
-  } catch (error) {
-    logDebug(`Auto-start failed: ${error.message}`);
-    setStatus("Start failed");
-  }
+  setStatus("Ready");
 });
