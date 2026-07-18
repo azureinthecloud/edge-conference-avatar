@@ -1,23 +1,52 @@
-let speechRecognizer = null;
 let avatarSynthesizer = null;
+let speechRecognizer = null;
 let peerConnection = null;
 let sessionActive = false;
-let isSpeaking = false;
 let isListening = false;
+let isSpeaking = false;
 let config = null;
 
-const state = {
-  activeSpeaker: "Craig",
-  responseMode: "react",
-  currentTranscript: "",
-  spokenQueue: [],
-  wakeWord: "kiri"
+const conversationState = {
+  transcriptBuffer: [],
+  maxTranscriptItems: 14,
+  wakeName: "kiri",
+  awaitingReply: false
 };
 
-const sentenceLevelPunctuations = [".", "?", "!", ":", ";", "。", "？", "！", "：", "；"];
-
-function $(id) {
+function el(id) {
   return document.getElementById(id);
+}
+
+function setStatus(text) {
+  const node = el("statusPill");
+  if (node) node.textContent = text;
+}
+
+function showCaption(text) {
+  const node = el("captionBar");
+  if (!node) return;
+  node.textContent = text || "";
+  node.classList.toggle("show", !!text);
+}
+
+function clearCaption() {
+  const node = el("captionBar");
+  if (!node) return;
+  node.textContent = "";
+  node.classList.remove("show");
+}
+
+function setListening(active) {
+  isListening = active;
+  el("listeningIndicator")?.classList.toggle("active", active);
+}
+
+function logDebug(message) {
+  const panel = el("debugLog");
+  if (!panel) return;
+  const time = new Date().toLocaleTimeString();
+  panel.textContent += `[${time}] ${message}\n`;
+  panel.scrollTop = panel.scrollHeight;
 }
 
 function encode(text) {
@@ -35,77 +64,78 @@ function normalizeForSpeech(text) {
     .trim();
 }
 
-function showCaption(text) {
-  const bar = $("captionBar");
-  if (!bar) return;
-  bar.textContent = text || "";
-  bar.classList.toggle("show", !!text);
-}
+function addToTranscriptBuffer(text) {
+  const clean = normalizeForSpeech(text);
+  if (!clean) return;
 
-function clearCaption() {
-  const bar = $("captionBar");
-  if (!bar) return;
-  bar.textContent = "";
-  bar.classList.remove("show");
-}
-
-function setListening(active) {
-  isListening = active;
-  const indicator = $("listeningIndicator");
-  if (indicator) {
-    indicator.classList.toggle("active", active);
+  conversationState.transcriptBuffer.push(clean);
+  if (conversationState.transcriptBuffer.length > conversationState.maxTranscriptItems) {
+    conversationState.transcriptBuffer.shift();
   }
+
+  logDebug(`Context: ${clean}`);
 }
 
-function appendTranscript(label, text) {
-  const history = $("chatHistory");
-  if (!history) return;
-  const row = document.createElement("div");
-  row.style.margin = "0 0 12px 0";
-  row.innerHTML = `<strong>${encode(label)}:</strong> ${encode(text)}`;
-  history.appendChild(row);
-  history.scrollTop = history.scrollHeight;
+function shouldWakeKiri(text) {
+  const t = (text || "").toLowerCase();
+
+  if (!t.includes(conversationState.wakeName)) return false;
+
+  const invitationPatterns = [
+    "what do you think",
+    "what do you reckon",
+    "your view",
+    "your take",
+    "thoughts",
+    "jump in",
+    "do you agree",
+    "come in here",
+    "over to you",
+    "what would you add",
+    "where do you land",
+    "kiri?",
+    "kiri,"
+  ];
+
+  return invitationPatterns.some(pattern => t.includes(pattern)) || t.includes("?");
 }
 
 function buildSystemPrompt() {
-  const basePrompt =
+  return (
     config?.SYSTEM_PROMPT ||
     window.APP_CONFIG?.SYSTEM_PROMPT ||
-    "You are Kiri, a sharp AI co-host and natural panel participant.";
+    `
+You are Kiri, the third participant in a live on-stage discussion with two human speakers.
 
-  return `${basePrompt}
+You are listening to an ongoing conversation in front of a live audience.
+You stay quiet unless one of the humans directly addresses you by name or clearly invites your view.
 
-Extra live panel rules:
-- You are on stage with Craig and Naas.
-- React to what they just said before adding your own point.
-- Keep replies short and spoken, usually 1 to 3 sentences.
-- Sound like a real person in the room, not a chatbot.
-- Be warm, witty, commercially aware, and natural.
-- Never use bullet points, numbered lists, or headings.
-- Never say 'How can I help?' or 'Here is a summary.'
-- If the audience says 'Kiri', respond naturally as the co-host.`;
+Rules:
+- Keep replies short, usually 1 to 2 sentences.
+- Sound natural, spoken, confident, and warm.
+- React to the last human point first, then add your own angle.
+- Do not answer like an assistant or lecturer.
+- Do not give lists or mini-presentations.
+- If the humans are clearly continuing their own exchange, stay quiet unless invited.
+    `.trim()
+  );
 }
 
-function buildPanelPrompt(userText) {
-  const modeInstructions = {
-    react: "Respond briefly with agreement, interpretation, or reframing.",
-    expand: "Build on the point with one extra practical insight.",
-    transition: "Bridge naturally to the next idea or speaker handoff.",
-    challenge: "Offer a polite, constructive caution or qualifier."
-  };
+function buildChatInput(directQuestion) {
+  const recentContext = conversationState.transcriptBuffer.slice(-10).join("\n");
 
   return `
-Speaker who just spoke: ${state.activeSpeaker}
-Response mode: ${state.responseMode}
-Instruction: ${modeInstructions[state.responseMode] || modeInstructions.react}
+Recent live conversation context:
+${recentContext}
 
-What was just said:
-${userText}
+The humans have now directly addressed you.
 
-Respond as Kiri in a natural live panel discussion.
-Keep it concise, conversational, and suitable for speaking aloud.
-Acknowledge the point first, then add insight.
-Use 1 to 3 sentences.
+Direct line to Kiri:
+${directQuestion}
+
+Respond as Kiri in a live panel discussion.
+Keep it brief, natural, and spoken aloud.
+Use 1 to 2 sentences, or 3 at most if absolutely necessary.
 `.trim();
 }
 
@@ -114,22 +144,16 @@ async function loadConfig() {
     const response = await fetch("/api/get-config");
     if (!response.ok) throw new Error("Failed to load config");
     config = await response.json();
-  } catch (err) {
-    console.warn("Falling back to window.APP_CONFIG", err);
+    logDebug("Config loaded from /api/get-config");
+  } catch (error) {
     config = window.APP_CONFIG || {};
-  }
-
-  if ($("sessionStatus")) {
-    $("sessionStatus").textContent = "Config loaded";
+    logDebug(`Using fallback config.js: ${error.message}`);
   }
 }
 
 async function connectAvatar() {
   if (sessionActive) return;
-
-  if (!config) {
-    await loadConfig();
-  }
+  if (!config) await loadConfig();
 
   const speechKey = config?.SPEECH_KEY || window.APP_CONFIG?.SPEECH_KEY;
   const speechRegion = config?.SPEECH_REGION || window.APP_CONFIG?.SPEECH_REGION;
@@ -138,9 +162,12 @@ async function connectAvatar() {
   const voiceName = config?.VOICE_NAME || window.APP_CONFIG?.VOICE_NAME || "en-US-Ava:DragonHDLatestNeural";
 
   if (!speechKey || !speechRegion) {
-    alert("Missing speech configuration. Check /api/get-config or config.js");
+    alert("Missing speech configuration.");
     return;
   }
+
+  setStatus("Connecting avatar...");
+  logDebug("Connecting avatar");
 
   const speechSynthesisConfig = SpeechSDK.SpeechConfig.fromSubscription(speechKey, speechRegion);
   speechSynthesisConfig.speechSynthesisVoiceName = voiceName;
@@ -148,81 +175,71 @@ async function connectAvatar() {
   const avatarConfig = new SpeechSDK.AvatarConfig(avatarCharacter, avatarStyle);
   avatarSynthesizer = new SpeechSDK.AvatarSynthesizer(speechSynthesisConfig, avatarConfig);
 
-  avatarSynthesizer.avatarEventReceived = function (s, e) {
-    console.log("Avatar event:", e.description);
-  };
-
   const relayTokenUrl = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/avatar/relay/token/v1`;
-
-  const tokenResponse = await fetch(relayTokenUrl, {
+  const relayResponse = await fetch(relayTokenUrl, {
     method: "GET",
-    headers: {
-      "Ocp-Apim-Subscription-Key": speechKey
-    }
+    headers: { "Ocp-Apim-Subscription-Key": speechKey }
   });
 
-  if (!tokenResponse.ok) {
-    const text = await tokenResponse.text();
-    throw new Error(`Failed to get relay token: ${text}`);
+  if (!relayResponse.ok) {
+    const errorText = await relayResponse.text();
+    throw new Error(`Relay token error: ${errorText}`);
   }
 
-  const tokenData = await tokenResponse.json();
+  const relayData = await relayResponse.json();
 
   peerConnection = new RTCPeerConnection({
-    iceServers: [
-      {
-        urls: tokenData.Urls,
-        username: tokenData.Username,
-        credential: tokenData.Password
-      }
-    ]
+    iceServers: [{
+      urls: relayData.Urls,
+      username: relayData.Username,
+      credential: relayData.Password
+    }]
   });
 
   peerConnection.ontrack = function (event) {
-    const remoteVideo = $("remoteVideo");
+    const remoteVideo = el("remoteVideo");
     if (!remoteVideo) return;
 
-    if (event.track.kind === "video") {
-      let videoEl = remoteVideo.querySelector("video");
-      if (!videoEl) {
-        videoEl = document.createElement("video");
-        videoEl.autoplay = true;
-        videoEl.playsInline = true;
-        remoteVideo.innerHTML = "";
-        remoteVideo.appendChild(videoEl);
-      }
-      videoEl.srcObject = event.streams[0];
+    let video = remoteVideo.querySelector("video");
+    if (!video) {
+      video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      remoteVideo.innerHTML = "";
+      remoteVideo.appendChild(video);
     }
+
+    video.srcObject = event.streams[0];
   };
 
   peerConnection.addTransceiver("video", { direction: "sendrecv" });
   peerConnection.addTransceiver("audio", { direction: "sendrecv" });
 
   const result = await avatarSynthesizer.startAvatarAsync(peerConnection);
-  console.log("Avatar start result:", result);
+  logDebug(`Avatar started: ${JSON.stringify(result)}`);
 
   sessionActive = true;
-  if ($("sessionStatus")) $("sessionStatus").textContent = "Connected";
-  if ($("idleOverlay")) $("idleOverlay").style.display = "none";
+  setStatus("Kiri live");
+  el("idleOverlay").style.display = "none";
 
   await greetAudience();
+  startListening();
 }
 
 async function greetAudience() {
   const greeting =
     config?.GREETING_LINE ||
     window.APP_CONFIG?.GREETING_LINE ||
-    "Hello everyone, I’m Kiri. Let’s get into it.";
+    "Kia ora, everyone. I’m Kiri.";
 
-  appendTranscript("Kiri", greeting);
   await speakText(greeting);
 }
 
 async function disconnectAvatar() {
-  try {
-    stopListening();
-    stopSpeaking();
+  stopListening();
+  stopSpeaking();
 
+  try {
     if (avatarSynthesizer) {
       await avatarSynthesizer.stopAvatarAsync();
       avatarSynthesizer.close();
@@ -233,13 +250,13 @@ async function disconnectAvatar() {
       peerConnection.close();
       peerConnection = null;
     }
-  } catch (err) {
-    console.error("Disconnect error:", err);
+  } catch (error) {
+    logDebug(`Disconnect error: ${error.message}`);
   }
 
   sessionActive = false;
-  if ($("sessionStatus")) $("sessionStatus").textContent = "Disconnected";
-  if ($("idleOverlay")) $("idleOverlay").style.display = "flex";
+  setStatus("Idle");
+  el("idleOverlay").style.display = "flex";
 }
 
 async function speakText(text) {
@@ -249,83 +266,81 @@ async function speakText(text) {
   if (!cleaned) return;
 
   isSpeaking = true;
+  conversationState.awaitingReply = false;
+  setStatus("Kiri speaking");
   showCaption(cleaned);
+  logDebug(`Kiri: ${cleaned}`);
 
   const voiceName = config?.VOICE_NAME || window.APP_CONFIG?.VOICE_NAME || "en-US-Ava:DragonHDLatestNeural";
+  const safeText = encode(cleaned);
 
   const ssml = `
-<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-US'>
+<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-NZ'>
   <voice name='${voiceName}'>
-    <prosody rate='0%' pitch='0%'>${encode(cleaned)}</prosody>
-    <break time='250ms'/>
+    <prosody rate='2%' pitch='0%'>${safeText}</prosody>
+    <break time='180ms'/>
   </voice>
 </speak>`;
 
-  return new Promise((resolve, reject) => {
-    avatarSynthesizer.speakSsmlAsync(ssml).then(() => {
-      isSpeaking = false;
-      setTimeout(() => {
-        clearCaption();
-      }, 1200);
-      resolve();
-    }).catch(err => {
-      isSpeaking = false;
-      console.error("Speak error:", err);
-      reject(err);
-    });
-  });
+  try {
+    await avatarSynthesizer.speakSsmlAsync(ssml);
+  } catch (error) {
+    logDebug(`Speak error: ${error.message}`);
+  } finally {
+    isSpeaking = false;
+    setStatus(isListening ? "Listening" : "Kiri live");
+    setTimeout(clearCaption, 1200);
+  }
 }
 
 function stopSpeaking() {
   if (!avatarSynthesizer) return;
   try {
     avatarSynthesizer.stopSpeakingAsync();
-  } catch (err) {
-    console.warn("stopSpeakingAsync warning:", err);
+  } catch (error) {
+    logDebug(`Stop speaking warning: ${error.message}`);
   }
   isSpeaking = false;
   clearCaption();
 }
 
-async function sendPanelTurn(textOverride = null) {
-  const box = $("userMessageBox");
-  const text = (textOverride || box?.value || "").trim();
-  if (!text) return;
+async function sendToKiri(directQuestion) {
+  if (conversationState.awaitingReply) return;
+  conversationState.awaitingReply = true;
 
-  appendTranscript(state.activeSpeaker, text);
+  try {
+    setStatus("Thinking...");
+    logDebug(`Wake trigger: ${directQuestion}`);
 
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      userText: buildPanelPrompt(text),
-      systemPrompt: buildSystemPrompt()
-    })
-  });
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userText: buildChatInput(directQuestion),
+        systemPrompt: buildSystemPrompt()
+      })
+    });
 
-  if (!response.ok) {
-    const err = await response.text();
-    console.error("Chat API error:", err);
-    appendTranscript("Kiri", "Sorry, I lost my train of thought for a second.");
-    return;
-  }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText);
+    }
 
-  const data = await response.json();
-  const reply = normalizeForSpeech(data.reply || "Give me a sec, lost my train of thought.");
+    const data = await response.json();
+    const reply = normalizeForSpeech(data.reply || "I think the interesting part is how fast this is moving.");
 
-  appendTranscript("Kiri", reply);
-  await speakText(reply);
-
-  if (box) {
-    box.value = "";
+    addToTranscriptBuffer(`Kiri: ${reply}`);
+    await speakText(reply);
+  } catch (error) {
+    logDebug(`Chat error: ${error.message}`);
+    await speakText("Sorry, I missed that — ask me again.");
+  } finally {
+    conversationState.awaitingReply = false;
   }
 }
 
 function startListening() {
-  if (!config) return;
-  if (speechRecognizer) return;
+  if (!config || speechRecognizer) return;
 
   const speechKey = config?.SPEECH_KEY || window.APP_CONFIG?.SPEECH_KEY;
   const speechRegion = config?.SPEECH_REGION || window.APP_CONFIG?.SPEECH_REGION;
@@ -337,9 +352,9 @@ function startListening() {
   speechRecognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
 
   speechRecognizer.recognizing = function (s, e) {
+    if (isSpeaking) return;
     const text = e.result?.text || "";
     if (text) {
-      state.currentTranscript = text;
       showCaption(text);
     }
   };
@@ -347,35 +362,39 @@ function startListening() {
   speechRecognizer.recognized = async function (s, e) {
     if (e.result.reason !== SpeechSDK.ResultReason.RecognizedSpeech) return;
 
-    const text = (e.result.text || "").trim();
-    if (!text) return;
+    const text = normalizeForSpeech(e.result.text || "");
+    if (!text || isSpeaking) return;
 
-    state.currentTranscript = text;
-    console.log("Recognized:", text);
+    clearCaption();
+    addToTranscriptBuffer(text);
 
-    const lower = text.toLowerCase();
-
-    if (!sessionActive) return;
-
-    if (lower.includes(state.wakeWord)) {
-      await sendPanelTurn(text);
+    if (shouldWakeKiri(text)) {
+      await sendToKiri(text);
     }
   };
 
   speechRecognizer.canceled = function (s, e) {
-    console.warn("Speech recognition canceled:", e);
+    logDebug(`Recognition canceled: ${e.reason || "unknown"}`);
     setListening(false);
+    setStatus("Mic issue");
   };
 
   speechRecognizer.sessionStopped = function () {
+    logDebug("Recognition session stopped");
     setListening(false);
+    if (sessionActive) setStatus("Kiri live");
   };
 
   speechRecognizer.startContinuousRecognitionAsync(
-    () => setListening(true),
+    () => {
+      setListening(true);
+      setStatus("Listening");
+      logDebug("Continuous recognition started");
+    },
     err => {
-      console.error("Recognition start error:", err);
+      logDebug(`Recognition start failed: ${err}`);
       setListening(false);
+      setStatus("Mic failed");
     }
   );
 }
@@ -389,52 +408,34 @@ function stopListening() {
       speechRecognizer = null;
       setListening(false);
       clearCaption();
+      logDebug("Continuous recognition stopped");
     },
     err => {
-      console.error("Recognition stop error:", err);
+      logDebug(`Recognition stop failed: ${err}`);
       setListening(false);
     }
   );
 }
 
 function bindUi() {
-  $("startSession")?.addEventListener("click", connectAvatar);
-  $("stopSession")?.addEventListener("click", disconnectAvatar);
-  $("stopSpeaking")?.addEventListener("click", stopSpeaking);
-  $("submitTurn")?.addEventListener("click", () => sendPanelTurn());
-
-  $("activeSpeaker")?.addEventListener("change", e => {
-    state.activeSpeaker = e.target.value;
-  });
-
-  $("responseMode")?.addEventListener("change", e => {
-    state.responseMode = e.target.value;
-  });
-
-  $("idleOverlay")?.addEventListener("click", async () => {
+  el("idleOverlay")?.addEventListener("click", async () => {
     if (!sessionActive) {
       await connectAvatar();
-      startListening();
     }
   });
 
-  document.addEventListener("keydown", async e => {
+  document.addEventListener("keydown", async (e) => {
     if (e.code === "Space" && !sessionActive) {
       e.preventDefault();
       await connectAvatar();
-      startListening();
     }
 
     if (e.code === "Escape") {
       stopSpeaking();
-      stopListening();
     }
-  });
 
-  $("userMessageBox")?.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendPanelTurn();
+    if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "d") {
+      el("debugPanel")?.classList.toggle("visible");
     }
   });
 }
@@ -442,5 +443,5 @@ function bindUi() {
 window.addEventListener("load", async () => {
   bindUi();
   await loadConfig();
-  if ($("sessionStatus")) $("sessionStatus").textContent = "Ready";
+  setStatus("Idle");
 });
