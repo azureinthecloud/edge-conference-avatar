@@ -226,12 +226,28 @@ async function connectAvatar() {
 
 async function greetAudience() {
   const greeting =
-    "Kia ora, and welcome to all the Kiwis at Edge Conference in Australia. It’s an absolute pleasure to be here with you. My name is Kiri. I’m an AI avatar created by Ingram Micro in New Zealand, and I’d like to share some very important security information. Apparently, one of the weakest passwords you can use is beef stew... because it’s not stroganoff.";
+    "Kia ora, and welcome to all the Kiwis at Edge Conference in Australia. It’s an absolute pleasure to be here with you. My name is Kiri. I’m an AI avatar created by Ingram Micro in New Zealand, and I’d like to share some very important security information. Apparently, one of the weakest passwords you can use is beef stew, because it’s not stroganoff.";
 
-  await speakText(greeting);
+  await speakText(greeting, {
+    rate: "0%",
+    pitch: "0%",
+    trailingBreakMs: 0
+  });
+
+  await wait(260);
+
+  await speakText("Ba dum tss.", {
+    rate: "-8%",
+    pitch: "-6%",
+    trailingBreakMs: 0
+  });
 }
 
-async function speakText(text) {
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function speakText(text, options = {}) {
   if (!avatarSynthesizer || !text) return;
 
   const cleaned = normalizeForSpeech(text);
@@ -245,12 +261,15 @@ async function speakText(text) {
 
   const voiceName = config?.VOICE_NAME || window.APP_CONFIG?.VOICE_NAME || "en-US-Ava:DragonHDLatestNeural";
   const safeText = encode(cleaned);
+  const rate = options.rate ?? "2%";
+  const pitch = options.pitch ?? "0%";
+  const trailingBreakMs = options.trailingBreakMs ?? 180;
+  const trailingBreak = trailingBreakMs > 0 ? `<break time='${trailingBreakMs}ms'/>` : "";
 
   const ssml = `
 <speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts' xml:lang='en-NZ'>
   <voice name='${voiceName}'>
-    <prosody rate='2%' pitch='0%'>${safeText}</prosody>
-    <break time='180ms'/>
+    <prosody rate='${rate}' pitch='${pitch}'>${safeText}</prosody>${trailingBreak}
   </voice>
 </speak>`;
 
