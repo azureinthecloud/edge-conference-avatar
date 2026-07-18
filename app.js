@@ -270,6 +270,17 @@ async function greetAudience() {
 
   await wait(220);
   playRimshot();
+
+  await wait(700);
+
+  await speakText(
+    "On that note, I’ll hand it back to Naas and Craig. Have an awesome conference, everyone.",
+    {
+      rate: "0%",
+      pitch: "0%",
+      trailingBreakMs: 0
+    }
+  );
 }
 
 async function speakText(text, options = {}) {
