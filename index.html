@@ -104,29 +104,6 @@
     backdrop-filter: blur(10px);
   }
 
-  #idleOverlay {
-    position: absolute;
-    inset: 0;
-    z-index: 30;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    background: #000;
-    color: #fff;
-    font-size: 24px;
-    line-height: 1.4;
-    cursor: pointer;
-    padding: 24px;
-  }
-
-  #idleOverlay small {
-    display: block;
-    margin-top: 10px;
-    color: #9adfff;
-    font-size: 14px;
-  }
-
   #debugPanel {
     position: absolute;
     left: 18px;
@@ -181,16 +158,11 @@
     <div id="remoteVideo"></div>
     <div id="captionBar"></div>
     <div id="listeningIndicator"></div>
-    <div id="statusPill">Idle</div>
+    <div id="statusPill">Starting…</div>
 
     <div id="debugPanel">
       <h4>Live Debug</h4>
       <div id="debugLog"></div>
-    </div>
-
-    <div id="idleOverlay">
-      Click anywhere or press SPACE to bring Kiri on stage
-      <small>She’ll listen continuously and only speak when you directly ask her.</small>
     </div>
   </div>
 

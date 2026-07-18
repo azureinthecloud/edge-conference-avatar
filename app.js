@@ -106,17 +106,14 @@ function buildSystemPrompt() {
     window.APP_CONFIG?.SYSTEM_PROMPT ||
     `
 You are Kiri, the third participant in a live on-stage discussion with two human speakers.
-
 You are listening to an ongoing conversation in front of a live audience.
 You stay quiet unless one of the humans directly addresses you by name or clearly invites your view.
-
-Rules:
-- Keep replies short, usually 1 to 2 sentences.
-- Sound natural, spoken, confident, and warm.
-- React to the last human point first, then add your own angle.
-- Do not answer like an assistant or lecturer.
-- Do not give lists or mini-presentations.
-- If the humans are clearly continuing their own exchange, stay quiet unless invited.
+Keep replies short, usually 1 to 2 sentences.
+Sound natural, spoken, confident, and warm.
+React to the last human point first, then add your own angle.
+Do not answer like an assistant or lecturer.
+Do not give lists or mini-presentations.
+If the humans are clearly continuing their own exchange, stay quiet unless invited.
     `.trim()
   );
 }
@@ -162,6 +159,7 @@ async function connectAvatar() {
   const voiceName = config?.VOICE_NAME || window.APP_CONFIG?.VOICE_NAME || "en-US-Ava:DragonHDLatestNeural";
 
   if (!speechKey || !speechRegion) {
+    setStatus("Missing config");
     alert("Missing speech configuration.");
     return;
   }
@@ -220,7 +218,6 @@ async function connectAvatar() {
 
   sessionActive = true;
   setStatus("Kiri live");
-  el("idleOverlay").style.display = "none";
 
   await greetAudience();
   startListening();
@@ -233,30 +230,6 @@ async function greetAudience() {
     "Kia ora, everyone. I’m Kiri.";
 
   await speakText(greeting);
-}
-
-async function disconnectAvatar() {
-  stopListening();
-  stopSpeaking();
-
-  try {
-    if (avatarSynthesizer) {
-      await avatarSynthesizer.stopAvatarAsync();
-      avatarSynthesizer.close();
-      avatarSynthesizer = null;
-    }
-
-    if (peerConnection) {
-      peerConnection.close();
-      peerConnection = null;
-    }
-  } catch (error) {
-    logDebug(`Disconnect error: ${error.message}`);
-  }
-
-  sessionActive = false;
-  setStatus("Idle");
-  el("idleOverlay").style.display = "flex";
 }
 
 async function speakText(text) {
@@ -354,9 +327,7 @@ function startListening() {
   speechRecognizer.recognizing = function (s, e) {
     if (isSpeaking) return;
     const text = e.result?.text || "";
-    if (text) {
-      showCaption(text);
-    }
+    if (text) showCaption(text);
   };
 
   speechRecognizer.recognized = async function (s, e) {
@@ -394,42 +365,13 @@ function startListening() {
     err => {
       logDebug(`Recognition start failed: ${err}`);
       setListening(false);
-      setStatus("Mic failed");
-    }
-  );
-}
-
-function stopListening() {
-  if (!speechRecognizer) return;
-
-  speechRecognizer.stopContinuousRecognitionAsync(
-    () => {
-      speechRecognizer.close();
-      speechRecognizer = null;
-      setListening(false);
-      clearCaption();
-      logDebug("Continuous recognition stopped");
-    },
-    err => {
-      logDebug(`Recognition stop failed: ${err}`);
-      setListening(false);
+      setStatus("Mic blocked");
     }
   );
 }
 
 function bindUi() {
-  el("idleOverlay")?.addEventListener("click", async () => {
-    if (!sessionActive) {
-      await connectAvatar();
-    }
-  });
-
-  document.addEventListener("keydown", async (e) => {
-    if (e.code === "Space" && !sessionActive) {
-      e.preventDefault();
-      await connectAvatar();
-    }
-
+  document.addEventListener("keydown", (e) => {
     if (e.code === "Escape") {
       stopSpeaking();
     }
@@ -443,5 +385,11 @@ function bindUi() {
 window.addEventListener("load", async () => {
   bindUi();
   await loadConfig();
-  setStatus("Idle");
+
+  try {
+    await connectAvatar();
+  } catch (error) {
+    logDebug(`Auto-start failed: ${error.message}`);
+    setStatus("Start failed");
+  }
 });
