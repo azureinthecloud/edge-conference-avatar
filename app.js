@@ -226,9 +226,7 @@ async function connectAvatar() {
 
 async function greetAudience() {
   const greeting =
-    config?.GREETING_LINE ||
-    window.APP_CONFIG?.GREETING_LINE ||
-    "Kia ora, everyone. I’m Kiri.";
+    "Kia ora, and welcome to all the Kiwis at Edge Conference in Australia. It’s an absolute pleasure to be here with you. My name is Kiri. I’m an AI avatar created by Ingram Micro in New Zealand, and I’d like to share some very important security information. Apparently, one of the weakest passwords you can use is beef stew... because it’s not stroganoff.";
 
   await speakText(greeting);
 }
