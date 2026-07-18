@@ -6,83 +6,42 @@
 <title>Edge Conference AI Co-Host</title>
 <style>
   html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    width: 100%;
-    background: #000;
-    overflow: hidden;
-    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #000; overflow: hidden;
+    font-family: Segoe UI, Arial, sans-serif;
   }
 
   #stage {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: radial-gradient(circle at center, #0b1b33 0%, #000 65%);
-  }
-
-  #remoteVideo {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+    position: relative; width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
   }
 
   #remoteVideo video {
-    height: 100vh;
-    width: auto;
-    max-width: 100vw;
+    height: 100vh; width: auto; max-width: 100vw;
     object-fit: cover;
   }
 
   #captionBar {
-    position: absolute;
-    bottom: 40px;
-    left: 10%;
-    right: 10%;
-    text-align: center;
-    color: #fff;
-    font-size: 28px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
-    padding: 0 40px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    max-height: 35vh;
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
+    position: absolute; bottom: 40px; left: 10%; right: 10%;
+    text-align: center; color: #fff; font-size: 28px;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+    padding: 0 40px; opacity: 0; transition: opacity 0.3s;
+    max-height: 35vh; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
     z-index: 5;
   }
 
-  #captionBar.show {
-    opacity: 1;
-  }
+  #captionBar.show { opacity: 1; }
 
   #listeningIndicator {
-    position: absolute;
-    top: 30px;
-    right: 40px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #ff3b30;
-    opacity: 0;
-    transition: opacity 0.2s;
+    position: absolute; top: 30px; right: 40px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #ff3b30; opacity: 0; transition: opacity 0.2s;
     box-shadow: 0 0 12px #ff3b30;
     z-index: 6;
   }
 
-  #listeningIndicator.active {
-    opacity: 1;
-    animation: pulse 1s infinite;
-  }
+  #listeningIndicator.active { opacity: 1; animation: pulse 1s infinite; }
 
   @keyframes pulse {
     0% { transform: scale(1); }
@@ -91,180 +50,112 @@
   }
 
   #idleOverlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.82);
-    color: #fff;
-    font-size: 22px;
-    letter-spacing: 1px;
-    cursor: pointer;
-    text-align: center;
-    padding: 20px;
+    position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; background: #000; color: #fff; font-size: 22px;
+    letter-spacing: 1px; cursor: pointer; text-align:center; padding: 20px;
     z-index: 10;
   }
 
   #idleOverlay small {
-    display: block;
-    margin-top: 10px;
-    font-size: 14px;
-    color: #9adfff;
-  }
-
-  #controlToggle {
-    position: absolute;
-    top: 24px;
-    left: 24px;
-    z-index: 12;
-    border: 0;
-    border-radius: 999px;
-    padding: 12px 16px;
-    background: rgba(9, 20, 40, 0.8);
-    color: #fff;
-    font-size: 14px;
-    backdrop-filter: blur(10px);
-    cursor: pointer;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    display:block; margin-top:10px; font-size:14px; color:#9adfff;
   }
 
   #controlPanel {
     position: absolute;
-    top: 72px;
+    top: 24px;
     left: 24px;
-    width: 380px;
+    width: 360px;
     max-width: calc(100vw - 48px);
-    max-height: calc(100vh - 96px);
-    overflow-y: auto;
-    z-index: 12;
-    background: rgba(10, 20, 39, 0.94);
+    background: rgba(10, 18, 34, 0.86);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 16px;
+    padding: 16px;
+    backdrop-filter: blur(12px);
     color: #fff;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 18px;
-    padding: 18px;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
-    backdrop-filter: blur(14px);
-    display: none;
-  }
-
-  #controlPanel.open {
-    display: block;
-  }
-
-  #controlPanel h2,
-  #controlPanel h3 {
-    margin: 0 0 12px 0;
-  }
-
-  #controlPanel h2 {
-    font-size: 20px;
+    z-index: 11;
   }
 
   #controlPanel h3 {
-    margin-top: 18px;
-    font-size: 15px;
-    color: #9adfff;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    margin: 0 0 10px;
+    font-size: 16px;
   }
 
-  .control-group {
-    margin-bottom: 14px;
-  }
-
-  .control-group label {
+  #controlPanel label {
     display: block;
-    margin-bottom: 6px;
     font-size: 13px;
-    color: #cfe5ff;
+    margin: 12px 0 6px;
+    color: #cfe4ff;
   }
 
-  .control-group input,
-  .control-group select,
-  .control-group textarea {
+  #controlPanel select,
+  #controlPanel textarea,
+  #controlPanel button {
     width: 100%;
     box-sizing: border-box;
-    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.08);
-    color: #fff;
+    border: 0;
     padding: 10px 12px;
     font-size: 14px;
   }
 
-  .control-group textarea {
+  #controlPanel select,
+  #controlPanel textarea {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+
+  #userMessageBox {
     min-height: 110px;
     resize: vertical;
   }
 
-  .button-row {
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
+  .buttonRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
     margin-top: 12px;
   }
 
-  .button-row button {
-    border: 0;
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 14px;
+  #controlPanel button {
     cursor: pointer;
-    color: #04111f;
     background: #7be0ff;
+    color: #04111f;
     font-weight: 600;
   }
 
-  .button-row button.secondary {
-    background: rgba(255, 255, 255, 0.14);
-    color: #fff;
-  }
-
   #chatHistory {
-    min-height: 120px;
+    margin-top: 14px;
     max-height: 180px;
     overflow-y: auto;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 12px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 10px;
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.45;
   }
 
-  .status-line {
+  #sessionStatus {
     font-size: 13px;
     color: #9adfff;
     margin-bottom: 8px;
   }
 
   @media (max-width: 640px) {
+    #controlPanel {
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      width: auto;
+      max-width: none;
+    }
+
     #captionBar {
       left: 4%;
       right: 4%;
       bottom: 24px;
       font-size: 20px;
-      padding: 0 10px;
-    }
-
-    #controlPanel {
-      top: 68px;
-      left: 12px;
-      right: 12px;
-      width: auto;
-      max-width: none;
-      max-height: calc(100vh - 84px);
-      padding: 14px;
-    }
-
-    #controlToggle {
-      top: 12px;
-      left: 12px;
-    }
-
-    #listeningIndicator {
-      top: 18px;
-      right: 18px;
+      padding: 0 12px;
     }
   }
 </style>
@@ -275,49 +166,35 @@
     <div id="listeningIndicator"></div>
     <div id="captionBar"></div>
 
-    <button id="controlToggle" type="button">Show Controls</button>
-
     <div id="controlPanel">
-      <h2>Kiri Control Panel</h2>
-      <div id="sessionStatus" class="status-line">Not connected</div>
+      <h3>Kiri Panel Controls</h3>
+      <div id="sessionStatus">Disconnected</div>
 
-      <h3>Panel Discussion</h3>
-      <div class="control-group">
-        <label for="activeSpeaker">Who just spoke?</label>
-        <select id="activeSpeaker">
-          <option value="Craig">Craig</option>
-          <option value="Naas">Naas</option>
-        </select>
-      </div>
+      <label for="activeSpeaker">Who just spoke?</label>
+      <select id="activeSpeaker">
+        <option value="Craig">Craig</option>
+        <option value="Naas">Naas</option>
+      </select>
 
-      <div class="control-group">
-        <label for="responseMode">Kiri reply type</label>
-        <select id="responseMode">
-          <option value="react">React</option>
-          <option value="expand">Expand</option>
-          <option value="transition">Transition</option>
-          <option value="challenge">Challenge</option>
-        </select>
-      </div>
+      <label for="responseMode">Response mode</label>
+      <select id="responseMode">
+        <option value="react">React</option>
+        <option value="expand">Expand</option>
+        <option value="transition">Transition</option>
+        <option value="challenge">Challenge</option>
+      </select>
 
-      <div class="control-group">
-        <label for="userMessageBox">What was just said?</label>
-        <textarea id="userMessageBox" placeholder="Type what Craig or Naas just said..."></textarea>
-      </div>
+      <label for="userMessageBox">Panel input</label>
+      <textarea id="userMessageBox" placeholder="Type what Craig or Naas just said..."></textarea>
 
-      <div class="button-row">
-        <button id="startSession" type="button">Start Avatar</button>
+      <div class="buttonRow">
+        <button id="startSession" type="button">Start Session</button>
+        <button id="stopSession" type="button">Stop Session</button>
         <button id="submitTurn" type="button">Send to Kiri</button>
+        <button id="stopSpeaking" type="button">Stop Speaking</button>
       </div>
 
-      <h3>Conversation</h3>
       <div id="chatHistory"></div>
-
-      <h3>Existing Config</h3>
-      <div class="control-group">
-        <label for="activeSpeakerNotes">Notes</label>
-        <input id="activeSpeakerNotes" type="text" value="Using app.js + config.js frontend" readonly>
-      </div>
     </div>
 
     <div id="idleOverlay">
@@ -325,17 +202,6 @@
       <small>Just say "Kiri" once she's live to talk to her. Press ESC to stop.</small>
     </div>
   </div>
-
-  <script>
-    (function () {
-      const toggle = document.getElementById('controlToggle');
-      const panel = document.getElementById('controlPanel');
-      toggle.addEventListener('click', function () {
-        panel.classList.toggle('open');
-        toggle.textContent = panel.classList.contains('open') ? 'Hide Controls' : 'Show Controls';
-      });
-    })();
-  </script>
 
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
   <script src="config.js"></script>
