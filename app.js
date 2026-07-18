@@ -14,6 +14,8 @@ const conversationState = {
   awaitingReply: false
 };
 
+let rimshotAudio = null;
+
 function el(id) {
   return document.getElementById(id);
 }
@@ -149,6 +151,38 @@ async function loadConfig() {
   }
 }
 
+function initRimshot() {
+  try {
+    rimshotAudio = new Audio("/assets/loud-cymbal-strong-drum_F_major.wav");
+    rimshotAudio.preload = "auto";
+    rimshotAudio.volume = 0.9;
+  } catch (error) {
+    logDebug(`Rimshot init error: ${error.message}`);
+  }
+}
+
+function playRimshot() {
+  if (!rimshotAudio) {
+    initRimshot();
+  }
+
+  if (!rimshotAudio) return;
+
+  try {
+    rimshotAudio.pause();
+    rimshotAudio.currentTime = 0;
+    rimshotAudio.play().catch(error => {
+      logDebug(`Rimshot play blocked: ${error.message}`);
+    });
+  } catch (error) {
+    logDebug(`Rimshot play error: ${error.message}`);
+  }
+}
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 async function connectAvatar() {
   if (sessionActive) return;
   if (!config) await loadConfig();
@@ -234,17 +268,8 @@ async function greetAudience() {
     trailingBreakMs: 0
   });
 
-  await wait(260);
-
-  await speakText("Ba dum tss.", {
-    rate: "-8%",
-    pitch: "-6%",
-    trailingBreakMs: 0
-  });
-}
-
-function wait(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  await wait(220);
+  playRimshot();
 }
 
 async function speakText(text, options = {}) {
@@ -397,6 +422,7 @@ async function startExperience() {
 
   try {
     await loadConfig();
+    initRimshot();
     await connectAvatar();
   } catch (error) {
     logDebug(`Start failed: ${error.message}`);
