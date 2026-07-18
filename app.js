@@ -268,7 +268,7 @@ async function greetAudience() {
     trailingBreakMs: 0
   });
 
-  await wait(220);
+  await wait(1000);
   playRimshot();
 
   await wait(700);
